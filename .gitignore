@@ -1,0 +1,21 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.pdb
+*.obj
+*.exe
+*.dll
+bin/
+obj/
+
+# Rider
+.idea/
+
+# Otros archivos de sistema
+Thumbs.db
+.DS_Store
+
+# Archivos de configuración local
+*.local
