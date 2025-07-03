@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System.Security.Claims;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using Amazon.S3;
+using Amazon.S3.Transfer;
 using Model = Beauvoir.Models.Model;
+using Beauvoir.Services;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -15,15 +18,18 @@ namespace Beauvoir.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+
     public class ModelController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
-        
-        public ModelController(AppDbContext dbContext )
+        private readonly MinioService _minioService;
+
+        public ModelController(AppDbContext dbContext, MinioService minioService)
         {
             _dbContext = dbContext;
-            
+            _minioService = minioService;
         }
+
         // GET: api/<ModelController>
         [HttpGet]
         public ActionResult<IEnumerable<ModelDto>>Get()
@@ -153,17 +159,7 @@ namespace Beauvoir.Controllers
                                 return StatusCode(500, "An unexpected error occurred during the search.");
             }
         }
-        [HttpGet("[action]/{id}")]
-        [Authorize]
-        public IActionResult Download(int id)
-        {
-            var model = _dbContext.Models.FirstOrDefault(m => m.Id == id);
-            if (model == null || model.FileContent == null)
-                return NotFound("Model not found.");
-
-            return File(model.FileContent, "application/octet-stream", model.FileName);
-        }
-
+        
 
         // POST api/<ModelController>
         [HttpPost("upload")]
@@ -184,13 +180,6 @@ namespace Beauvoir.Controllers
             if (!allowedExtensions.Contains(extension))
                 return BadRequest("Only .obj and .fbx files are allowed.");
 
-            byte[] fileBytes;
-            using (var ms = new MemoryStream())
-            {
-                await file.CopyToAsync(ms);
-                fileBytes = ms.ToArray();
-            }
-
             var username = User.FindFirst(ClaimTypes.Name)?.Value;
             var user = _dbContext.Users.FirstOrDefault(u => u.Username == username);
             if (user == null)
@@ -201,6 +190,19 @@ namespace Beauvoir.Controllers
             if (missingTags.Any())
                 return BadRequest($"Missing tags: {string.Join(", ", missingTags)}");
 
+            // Generar nombre único para el objeto en Minio
+            var objectName = $"{Guid.NewGuid()}{extension}";
+
+            // Subir a Minio
+            using (var stream = file.OpenReadStream())
+            {
+                await _minioService.UploadFileAsync(
+                    objectName,
+                    stream,
+                    "application/octet-stream");
+            }
+
+            // Crear modelo en base de datos
             var model = new Model
             {
                 Name = title,
@@ -208,7 +210,7 @@ namespace Beauvoir.Controllers
                 IsPublic = isPublic,
                 FileName = file.FileName,
                 FileExtension = extension,
-                FileContent = fileBytes,
+                FilePath = objectName, // Guardar la referencia al objeto en Minio
                 OwnerId = user.Id,
                 Owner = user,
                 ModelTags = dbTags.Select(t => new ModelTag { Tag = t }).ToList(),
@@ -222,7 +224,17 @@ namespace Beauvoir.Controllers
             return Ok(modelDto);
         }
 
+        [HttpGet("[action]/{id}")]
+        [Authorize]
+        public async Task<IActionResult> Download(int id)
+        {
+            var model = _dbContext.Models.FirstOrDefault(m => m.Id == id);
+            if (model == null || string.IsNullOrEmpty(model.FilePath))
+                return NotFound("Model not found.");
 
+            var stream = await _minioService.DownloadFileAsync(model.FilePath);
+            return File(stream, "application/octet-stream", model.FileName);
+        }
 
         // PUT api/<ModelController>/5 // change visibility 
         [HttpPut("{id}")]

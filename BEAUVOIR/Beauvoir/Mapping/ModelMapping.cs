@@ -16,7 +16,8 @@ namespace Beauvoir.Mapping
                 Tags = model.ModelTags.Select(mt => mt.Tag.Name).ToList(),
               //  FilePath = model.FilePath,
                 Owner = model.Owner.Username, 
-                IsPublic = model.IsPublic
+                IsPublic = model.IsPublic,
+                CreatedAt = model.CreatedAt 
             };
 
 
