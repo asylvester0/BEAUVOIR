@@ -1,4 +1,5 @@
-﻿using Microsoft.IdentityModel.Tokens;
+﻿using Beauvoir.Models;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -7,7 +8,7 @@ namespace Beauvoir.Security
 {
     public class JwtTokenProvider
     {
-        public static string CreateToken(string secureKey, int expiration, string subject = null)
+        public static string CreateToken(string secureKey, int expiration,int userId, string subject = null)
         {
             // Get secret key bytes
             var tokenKey = Encoding.UTF8.GetBytes(secureKey);
@@ -25,6 +26,7 @@ namespace Beauvoir.Security
             {
                 tokenDescriptor.Subject = new ClaimsIdentity(new System.Security.Claims.Claim[]
                 {
+                    new System.Security.Claims.Claim(ClaimTypes.NameIdentifier, userId.ToString()),  // Poner use
                     new System.Security.Claims.Claim(ClaimTypes.Name, subject),
                     new System.Security.Claims.Claim(JwtRegisteredClaimNames.Sub, subject)
                     

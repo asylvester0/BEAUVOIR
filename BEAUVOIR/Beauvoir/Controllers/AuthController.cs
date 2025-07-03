@@ -98,7 +98,7 @@ namespace Beauvoir.Controllers
                     return BadRequest(genericLoginFail);
 
                 var secureKey = _configuration["JWT:SecureKey"];
-                var serializedToken = JwtTokenProvider.CreateToken(secureKey, 120, loginDto.Username);
+                var serializedToken = JwtTokenProvider.CreateToken(secureKey, 120,existingUser.Id, loginDto.Username);
 
                 return Ok(serializedToken);
             }
