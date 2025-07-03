@@ -110,19 +110,25 @@ namespace Beauvoir.Controllers
         }
         [HttpGet("[action]/{id}")]
         [Authorize]
-        public string Download(int id)
+        public IActionResult Download(int id)
         {
-            return "value";
+            var model = _dbContext.Models.FirstOrDefault(m => m.Id == id);
+            if (model == null || model.FileContent == null)
+                return NotFound("Model not found.");
+
+            return File(model.FileContent, "application/octet-stream", model.FileName);
         }
+
 
         // POST api/<ModelController>
         [HttpPost("upload")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadModel([FromForm] string title,
-                                             [FromForm] string description,
-                                             [FromForm] bool isPublic,
-                                             [FromForm] List<int> tagsId,
-                                             IFormFile file)
+        public async Task<IActionResult> UploadModel(
+     [FromForm] string title,
+     [FromForm] string description,
+     [FromForm] bool isPublic,
+     [FromForm] List<int> tagsId,
+     IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("No file uploaded.");
@@ -133,44 +139,31 @@ namespace Beauvoir.Controllers
             if (!allowedExtensions.Contains(extension))
                 return BadRequest("Only .obj and .fbx files are allowed.");
 
-            // Save the file locally (e.g., wwwroot/Models)
-            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Models");
-            if (!Directory.Exists(uploadsPath))
-                Directory.CreateDirectory(uploadsPath);
-
-            var fileName = $"{Guid.NewGuid()}{extension}";
-            var filePath = Path.Combine(uploadsPath, fileName);
-            var relativePath = Path.Combine("Models", fileName); // for client-side reference
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            byte[] fileBytes;
+            using (var ms = new MemoryStream())
             {
-                await file.CopyToAsync(stream);
+                await file.CopyToAsync(ms);
+                fileBytes = ms.ToArray();
             }
 
-            // Get current user
             var username = User.FindFirst(ClaimTypes.Name)?.Value;
             var user = _dbContext.Users.FirstOrDefault(u => u.Username == username);
             if (user == null)
                 return Unauthorized("Invalid user.");
 
-            // Validate tags
-            var dbTags = _dbContext.Tags
-                .Where(t => tagsId.Contains(t.Id))
-                .ToList();
+            var dbTags = _dbContext.Tags.Where(t => tagsId.Contains(t.Id)).ToList();
+            var missingTags = tagsId.Except(dbTags.Select(t => t.Id)).ToList();
+            if (missingTags.Any())
+                return BadRequest($"Missing tags: {string.Join(", ", missingTags)}");
 
-            var missingTagsId = tagsId.Except(dbTags.Select(t => t.Id)).ToList();
-            if (missingTagsId.Any())
-            {
-                return BadRequest($"Some tag IDs were not found: {string.Join(", ", missingTagsId)}");
-            }
-
-            // Create model entity
             var model = new Model
             {
                 Name = title,
                 Description = description,
                 IsPublic = isPublic,
-                FilePath = relativePath,
+                FileName = file.FileName,
+                FileExtension = extension,
+                FileContent = fileBytes,
                 OwnerId = user.Id,
                 Owner = user,
                 ModelTags = dbTags.Select(t => new ModelTag { Tag = t }).ToList(),
@@ -181,11 +174,10 @@ namespace Beauvoir.Controllers
             await _dbContext.SaveChangesAsync();
 
             var modelDto = ModelMapping.MapToBL(model);
-
             return Ok(modelDto);
         }
-            
-        
+
+
 
         // PUT api/<ModelController>/5 // change visibility 
         [HttpPut("{id}")]

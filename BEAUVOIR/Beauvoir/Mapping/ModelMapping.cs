@@ -14,7 +14,7 @@ namespace Beauvoir.Mapping
                 Title = model.Name,
                 Description = model.Description,
                 Tags = model.ModelTags.Select(mt => mt.Tag.Name).ToList(),
-                FilePath = model.FilePath,
+              //  FilePath = model.FilePath,
                 Owner = model.Owner.Username, 
                 IsPublic = model.IsPublic
             };
@@ -29,7 +29,7 @@ namespace Beauvoir.Mapping
                 Name = model.Title,
                 Description = model.Description,
                 IsPublic = model.IsPublic,
-                FilePath = model.FilePath
+                //FilePath = model.FilePath
             };
     }
 }
