@@ -19,20 +19,20 @@ namespace Beauvoir.Controllers
 
         // GET: api/friendship/list
         [HttpGet("list")]
-        public async Task<IActionResult> List()
+        public ActionResult List()
         {
             var userId = GetUserId();
 
             // Obtener todos los friendships aceptados donde soy requester o receiver
-            var friendships = await _dbContext.Friendships
+            var friendships =  _dbContext.Friendships
                 .Where(f => (f.RequesterId == userId || f.ReceiverId == userId) && f.Status == "Accepted")
-                .ToListAsync();
+                .ToList();
 
             // Obtener IDs de los amigos (el que no soy yo)
             var friendIds = friendships.Select(f => f.RequesterId == userId ? f.ReceiverId : f.RequesterId).ToList();
 
             // Obtener datos básicos de esos amigos (nombre, email, etc) - según User model
-            var friends = await _dbContext.Users
+            var friends =  _dbContext.Users
                 .Where(u => friendIds.Contains(u.Id))
                 .Select(u => new
                 {
@@ -42,7 +42,7 @@ namespace Beauvoir.Controllers
                     u.LastName,
                     u.Email
                 })
-                .ToListAsync();
+                .ToList();
 
             return Ok(friends);
         }
@@ -65,7 +65,7 @@ namespace Beauvoir.Controllers
                           u.Email,
                           f.CreatedAt
                       })
-                .ToListAsync();
+                .ToList();
 
             return Ok(requests);
         }

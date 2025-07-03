@@ -4,6 +4,7 @@ using Beauvoir.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System.Security.Claims;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 using Model = Beauvoir.Models.Model;
@@ -29,7 +30,30 @@ namespace Beauvoir.Controllers
         {
            try
             {
-                var dbModel = ModelInfo().Where(p => p.IsPublic);
+                var dbModel = ModelInfo();
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    // Usuario no autenticado -> solo modelos públicos
+                    dbModel = dbModel.Where(m => m.IsPublic);
+                }
+              
+                  else
+                    {
+                        var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+                        if (user == null)
+                            return Unauthorized();
+
+                    var friendsIds = GetFriendIds(userId);
+
+                    dbModel = dbModel.Where(m =>
+                            m.IsPublic
+                            || m.OwnerId == user.Id
+                            || (!m.IsPublic && friendsIds.Contains(m.OwnerId))
+                        );
+                    }
+
+                
                 // create restriccions if it is register or not 
                 //WHere..
                 var models = ModelMapping.MapToBL(dbModel);
@@ -52,6 +76,27 @@ namespace Beauvoir.Controllers
                 {
                     return NotFound($"Could not find project with id {id}");
                 }
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    // Usuario no autenticado solo ve si es público
+                    if (!dbmodel.IsPublic)
+                        return Forbid();
+                }
+                else
+                {
+                    var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+                    if (user == null)
+                        return Unauthorized();
+
+                    var friendsIds = GetFriendIds(userId);
+                     
+
+                    if (!dbmodel.IsPublic && dbmodel.OwnerId != user.Id && !friendsIds.Contains(dbmodel.OwnerId))
+                        return Forbid();
+
+                }
+
                 var model = ModelMapping.MapToBL(dbmodel);
 
                  return Ok(model);
@@ -183,18 +228,37 @@ namespace Beauvoir.Controllers
         [HttpPut("{id}")]
         public ActionResult IsPublic(int id,bool boolean)
         {
-            var dbmodel = ModelInfo()
-                    .FirstOrDefault(x => x.Id == id);
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(userIdClaim, out int userId))
+                {
+                    // Usuario no autenticado solo ve si es público
+                    return Forbid();
+                }
 
-            if (dbmodel == null)
-            {       
-                return NotFound($"Project with ID={id} not found.");
+
+                var dbmodel = ModelInfo()
+                        .FirstOrDefault(x => x.Id == id);
+
+
+
+                if (dbmodel == null)
+                {
+                    return NotFound($"Project with ID={id} not found.");
+                }
+                if (dbmodel.OwnerId != userId)
+                    return Forbid("You are not the owner of this model.");
+
+                dbmodel.IsPublic = boolean;
+                _dbContext.SaveChanges();
+
+                return Ok($"Model ID={id} visibility change.");
             }
-
-            dbmodel.IsPublic = boolean;
-            _dbContext.SaveChanges();
-
-            return Ok($"Model ID={id} visibility change.");
+            catch (Exception ex)
+            {
+                return StatusCode(500, "You can not modify this model");
+            }
         }
 
         private IQueryable<Model> ModelInfo()
@@ -206,5 +270,15 @@ namespace Beauvoir.Controllers
                    
             return query;
         }
+        private List<int> GetFriendIds(int userId)
+        {
+            return _dbContext.Friendships
+                .Where(f =>
+                    (f.RequesterId == userId || f.ReceiverId == userId) &&
+                    f.Status == "Accepted")
+                .Select(f => f.RequesterId == userId ? f.ReceiverId : f.RequesterId)
+                .ToList();
+        }
+
     }
 }
