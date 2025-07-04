@@ -9,6 +9,7 @@
         public List<string> Tags { get; set; }
         public string Owner { get; set; }
         public bool IsPublic { get; set; }
+        public DateTime CreatedAt { get; set; } 
 
     }
 }

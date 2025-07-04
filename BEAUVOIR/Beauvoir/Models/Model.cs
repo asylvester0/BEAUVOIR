@@ -11,10 +11,10 @@
         public string Name { get; set; } = null!;
 
         public string Description { get; set; } = null!;
-
+        public string FilePath { get; set; }
         public string FileName { get; set; } // original filename
         public string FileExtension { get; set; }
-        public byte[] FileContent { get; set; } // <- NEW: store file data
+     
 
 
         public virtual ICollection<ModelTag> ModelTags { get; set; } = new List<ModelTag>();
