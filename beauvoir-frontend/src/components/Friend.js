@@ -14,14 +14,14 @@ function FriendsList({ token }) {
     axios
       .get(`${apiBase}/list`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => setFriends(res.data))
-      .catch(() => setError("Error cargando amigos"))
+      .catch(() => setError("Error loading friends"))
       .finally(() => setLoading(false));
   };
 
   // Eliminar amigo no implementado aún, solo aviso
   const removeFriend = (friendId) => {
     alert(
-      "No hay endpoint para eliminar amigos en el backend actual. ¿Quieres que te ayude a agregarlo?"
+      "Couldn´t delete try again later"
     );
   };
 
@@ -29,13 +29,13 @@ function FriendsList({ token }) {
     if(token) fetchFriends();
   }, [token]);
 
-  if (loading) return <p>Cargando amigos...</p>;
+  if (loading) return <p>Loading Friends...</p>;
   if (error) return <p style={{color: "red"}}>{error}</p>;
-  if (friends.length === 0) return <p>No tienes amigos aún.</p>;
+  if (friends.length === 0) return <p>No Friends.</p>;
 
  return (
     <div>
-      <h2>Mis Amigos</h2>
+      <h2>Friends</h2>
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
@@ -65,7 +65,7 @@ function FriendsList({ token }) {
                 alignSelf: 'flex-start'
               }}
             >
-              Eliminar
+              Delete
             </button>
           </div>
         ))}
@@ -85,7 +85,7 @@ function FriendRequests({ token }) {
     axios
       .get(`${apiBase}/requests`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => setRequests(res.data))
-      .catch(() => setError("Error cargando solicitudes"))
+      .catch(() => setError("Error loading Friend Request"))
       .finally(() => setLoading(false));
   };
 
@@ -96,20 +96,20 @@ function FriendRequests({ token }) {
     axios
       .post(url, {}, { headers: { Authorization: `Bearer ${token}` } })
       .then(() => fetchRequests())
-      .catch(() => alert("Error respondiendo solicitud"));
+      .catch(() => alert("Error answering request"));
   };
 
   useEffect(() => {
     if(token) fetchRequests();
   }, [token]);
 
-  if (loading) return <p>Cargando solicitudes...</p>;
+  if (loading) return <p>Loading request...</p>;
   if (error) return <p style={{color: "red"}}>{error}</p>;
-  if (requests.length === 0) return <p>No tienes solicitudes pendientes.</p>;
+  if (requests.length === 0) return <p>No pending requests.</p>;
 
   return (
     <div>
-      <h2>Solicitudes de Amistad</h2>
+      <h2>Follow Request</h2>
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
@@ -140,7 +140,7 @@ function FriendRequests({ token }) {
                   cursor: 'pointer'
                 }}
               >
-                Aceptar
+                Accept
               </button>
               <button 
                 onClick={() => respondRequest(r.id, false)}
@@ -154,7 +154,7 @@ function FriendRequests({ token }) {
                   cursor: 'pointer'
                 }}
               >
-                Rechazar
+                Decline
               </button>
             </div>
           </div>
@@ -170,15 +170,15 @@ function SendFriendRequest({ token }) {
 
   const sendRequest = () => {
     if (!userId) {
-      setMessage('Debes ingresar un ID de usuario válido');
+      setMessage('Select a valid username');
       return;
     }
      axios
       .post(`${apiBase}/request/${userId}`, {}, { headers: { Authorization: `Bearer ${token}` } })
-      .then(() => setMessage('Solicitud enviada'))
+      .then(() => setMessage('Request send'))
       .catch((err) => {
         setMessage(
-          err.response?.data || 'Error enviando solicitud de amistad'
+          err.response?.data || 'Error sending request'
         );
       });
   };
@@ -186,7 +186,7 @@ function SendFriendRequest({ token }) {
 
   return (
     <div>
-      <h2>Enviar Solicitud de Amistad</h2>
+      <h2>Send Friend Request</h2>
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
         <input
           type="number"
@@ -211,7 +211,7 @@ function SendFriendRequest({ token }) {
             cursor: 'pointer'
           }}
         >
-          Enviar solicitud
+         Send Request
         </button>
       </div>
       {message && <p style={{ marginTop: '1rem' }}>{message}</p>}

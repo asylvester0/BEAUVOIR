@@ -45,7 +45,7 @@ function ModelPage() {
   // ========================
   const handleUpload = async () => {
     if (!file) {
-      setError('Selecciona un archivo (.obj o .fbx)');
+      setError('Select file (.obj or .fbx)');
       return;
     }
 
@@ -70,7 +70,7 @@ function ModelPage() {
         throw new Error(msg);
       }
 
-      alert('Modelo subido correctamente');
+      alert('Model correctly upload');
       setTitle('');
       setDescription('');
       setIsPublic(false);
@@ -79,7 +79,7 @@ function ModelPage() {
       const newModel = await res.json();
       setModels(prev => [...prev, newModel]);
     } catch (err) {
-      setError(err.message || 'Error al subir modelo');
+      setError(err.message || 'Error uploading model');
     }
   };
 
@@ -93,7 +93,7 @@ function ModelPage() {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('Error al descargar');
+      if (!res.ok) throw new Error('Error downloading');
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -103,7 +103,7 @@ function ModelPage() {
       a.click();
       a.remove();
     } catch (err) {
-      alert('No se pudo descargar el modelo.');
+      alert('Model could not download.');
     }
   };
 
@@ -114,19 +114,19 @@ function ModelPage() {
 
       <input
         type="text"
-        placeholder="Título"
+        placeholder="Title"
         value={title}
         onChange={e => setTitle(e.target.value)}
       /><br />
 
       <textarea
-        placeholder="Descripción"
+        placeholder="Description"
         value={description}
         onChange={e => setDescription(e.target.value)}
       /><br />
 
       <label>
-        ¿Público?
+        ¿Public?
         <input
           type="checkbox"
           checked={isPublic}
@@ -136,7 +136,7 @@ function ModelPage() {
 
       <input type="file" onChange={e => setFile(e.target.files[0])} /><br />
 
-      <label>Etiquetas:</label>
+      <label>Tags:</label>
       <select multiple value={selectedTags} onChange={e => {
         const selected = Array.from(e.target.selectedOptions, opt => parseInt(opt.value));
         setSelectedTags(selected);
@@ -146,16 +146,16 @@ function ModelPage() {
         ))}
       </select><br />
 
-      <button onClick={handleUpload}>Subir modelo</button>
+      <button onClick={handleUpload}>Upload</button>
 
       <hr />
 
-      <h2>Modelos disponibles</h2>
+      <h2>Models avaliables</h2>
       <ul>
         {models.map(model => (
           <li key={model.id}>
             <strong>{model.name}</strong> - {model.description}
-            <button onClick={() => handleDownload(model.id, model.fileName)}>Descargar</button>
+            <button onClick={() => handleDownload(model.id, model.fileName)}>Download</button>
           </li>
         ))}
       </ul>

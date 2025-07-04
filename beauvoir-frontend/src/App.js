@@ -59,7 +59,7 @@ function App() {
                 cursor: 'pointer'
               }}
             >
-              Modelos
+              Models
             </button>
             <button 
               onClick={() => setDashboardView('friends')} 
@@ -72,7 +72,7 @@ function App() {
                 cursor: 'pointer'
               }}
             >
-              Amigos
+              Friends
             </button>
             <button 
               onClick={() => setDashboardView('requests')} 
@@ -85,7 +85,7 @@ function App() {
                 cursor: 'pointer'
               }}
             >
-              Solicitudes
+              Follow Request
             </button>
             <button 
               onClick={() => setDashboardView('sendRequest')} 
@@ -97,7 +97,7 @@ function App() {
                 cursor: 'pointer'
               }}
             >
-              Enviar Solicitud
+              Send Friend Request
             </button>
           </nav>
 
