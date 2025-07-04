@@ -31,7 +31,6 @@ const TopBar = () => {
           borderRadius: '4px',
           backgroundColor: 'white'
         }}>
-          <option>All Categories</option>
         </select>
       </div>
     </div>

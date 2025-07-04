@@ -27,7 +27,7 @@ function ModelDashboard({ token }) {
       const data = await res.json();
       setModels(data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
     } catch (err) {
-      setError('Error al cargar modelos');
+      setError('Error charging models');
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,7 @@ function ModelDashboard({ token }) {
   // ========================
   const handleUpload = async () => {
     if (!file) {
-      setError('Selecciona un archivo');
+      setError('Select file');
       return;
     }
 
@@ -74,7 +74,7 @@ function ModelDashboard({ token }) {
 
       if (!res.ok) throw new Error(await res.text());
 
-      alert('Modelo subido correctamente');
+      alert('Models upload sucessfully');
       setTitle('');
       setDescription('');
       setIsPublic(false);
@@ -82,7 +82,7 @@ function ModelDashboard({ token }) {
       setSelectedTags([]);
       fetchModels(); // actualiza lista
     } catch (err) {
-      setError(err.message || 'Error al subir modelo');
+      setError(err.message || 'Error uploading  model');
     }
   };
 
@@ -94,7 +94,7 @@ function ModelDashboard({ token }) {
       const res = await fetch(`${API_BASE}/download/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('Error al descargar');
+      if (!res.ok) throw new Error('Error downloading');
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -104,7 +104,7 @@ function ModelDashboard({ token }) {
       a.click();
       a.remove();
     } catch {
-      alert('No se pudo descargar el modelo.');
+      alert('Model coudn´t download.');
     }
   };
 
@@ -123,7 +123,7 @@ function ModelDashboard({ token }) {
       const data = await response.json();
       setModels(data.data || data);
     } catch {
-      setError('Error al buscar modelos');
+      setError('Error finding models');
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ function ModelDashboard({ token }) {
   return (
     <div style={{ padding: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>Modelos 3D</h2>
+        <h2 style={{ margin: 0 }}>3D Models </h2>
         <button 
           onClick={() => setShowUpload(!showUpload)}
           style={{
@@ -144,22 +144,22 @@ function ModelDashboard({ token }) {
             cursor: 'pointer'
           }}
         >
-          {showUpload ? 'Volver al listado' : 'Subir nuevo modelo'}
+          {showUpload ? 'Go back to list' : 'Upload new model'}
         </button>
       </div>
 
       {showUpload ?  (
         <div style={{ marginTop: '1rem' }}>
-          <h3>Subir modelo</h3>
+          <h3>Upload models</h3>
           {error && <p style={{ color: 'red' }}>{error}</p>}
           <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} /><br />
           <textarea placeholder="Descripción" value={description} onChange={e => setDescription(e.target.value)} /><br />
           <label>
-            ¿Público?
+            ¿Public?
             <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)} />
           </label><br />
           <input type="file" onChange={e => setFile(e.target.files[0])} /><br />
-          <label>Etiquetas:</label>
+          <label>Tags:</label>
           <select multiple value={selectedTags} onChange={e => {
             const selected = Array.from(e.target.selectedOptions, opt => parseInt(opt.value));
             setSelectedTags(selected);
@@ -168,7 +168,7 @@ function ModelDashboard({ token }) {
               <option key={tag.id} value={tag.id}>{tag.name}</option>
             ))}
           </select><br />
-          <button onClick={handleUpload}>Subir modelo</button>
+          <button onClick={handleUpload}>Upload model</button>
         </div>
       ) : (
         <>
@@ -177,17 +177,17 @@ function ModelDashboard({ token }) {
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Buscar por título o tags"
+              placeholder="Find title or tags"
               style={{ width: '70%', padding: '0.5rem' }}
             />
             <button type="submit" style={{ padding: '0.5rem 1rem', marginLeft: '0.5rem' }}>
-              Buscar
+              Search
             </button>
           </form>
 
-          {loading && <p>Cargando modelos...</p>}
+          {loading && <p>Charging models...</p>}
           {error && <p style={{ color: 'red' }}>{error}</p>}
-          {!loading && models.length === 0 && <p>No hay modelos disponibles.</p>}
+          {!loading && models.length === 0 && <p>No models avaliable.</p>}
 
           <div style={{ 
             display: 'grid', 
@@ -225,7 +225,7 @@ function ModelDashboard({ token }) {
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden'
                   }}>
-                    {model.description || 'Sin descripción'}
+                    {model.description || 'No description'}
                   </p>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {model.tags?.slice(0, 3).map(tag => (
@@ -288,30 +288,19 @@ function ModelDashboard({ token }) {
                   >
                     Download
                   </button>
-                  <button 
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      background: '#6c757d',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Share
-                  </button>
-                  <button 
-                    onClick={() => setSelectedModel(null)}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      background: 'transparent',
-                      border: '1px solid #6c757d',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Close
-                  </button>
+                 <button 
+                  onClick={() => setSelectedModel(null)}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Close
+                </button>
                 </div>
               </div>
             </div>
