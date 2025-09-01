@@ -36,11 +36,14 @@ namespace Beauvoir.Controllers
 
             try
             {
-                
+
                 // Check if there is such a username in the database already
 
                 if (_DbContext.Users.Any(x => x.Username.Equals(trimmedUsername)))
                     return BadRequest($"Username {trimmedUsername} already exists");
+                if (_DbContext.Users.Any(x => x.Email.Equals(userDto.Email)))
+                    return BadRequest($"Email {userDto.Email} already exists");
+
 
                 // Hash the password
                 var b64salt = PasswordHashProvider.GetSalt();
@@ -71,7 +74,7 @@ namespace Beauvoir.Controllers
                     Username = user.Username,
                     Password = userDto.Password,
                     Email = user.Email
-                }); 
+                });
 
             }
             catch (Exception ex)
@@ -98,7 +101,7 @@ namespace Beauvoir.Controllers
                     return BadRequest(genericLoginFail);
 
                 var secureKey = _configuration["JWT:SecureKey"];
-                var serializedToken = JwtTokenProvider.CreateToken(secureKey, 120,existingUser.Id, loginDto.Username);
+                var serializedToken = JwtTokenProvider.CreateToken(secureKey, 120, existingUser.Id, loginDto.Username);
 
                 return Ok(serializedToken);
             }
@@ -124,7 +127,7 @@ namespace Beauvoir.Controllers
                 if (user == null)
                     return NotFound("User not found.");
 
-                return Ok (new 
+                return Ok(new
                 {
                     user.Id,
                     user.Username,

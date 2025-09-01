@@ -4,13 +4,11 @@ using Beauvoir.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using System.Security.Claims;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
-using Amazon.S3;
-using Amazon.S3.Transfer;
 using Model = Beauvoir.Models.Model;
 using Beauvoir.Services;
+using Minio.DataModel.Args;
+using Minio;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -21,20 +19,25 @@ namespace Beauvoir.Controllers
 
     public class ModelController : ControllerBase
     {
+        private readonly IMinioClient _minioClient;
+        private readonly IConfiguration _config;
         private readonly AppDbContext _dbContext;
-        private readonly MinioService _minioService;
+        private readonly string _bucketName;
 
-        public ModelController(AppDbContext dbContext, MinioService minioService)
+        public ModelController(IMinioClient minioClient, IConfiguration config, AppDbContext dbContext)
         {
+            _minioClient = minioClient;
+            _config = config;
             _dbContext = dbContext;
-            _minioService = minioService;
+            _bucketName = _config["Minio:BucketName"];
         }
+
 
         // GET: api/<ModelController>
         [HttpGet]
-        public ActionResult<IEnumerable<ModelDto>>Get()
+        public ActionResult<IEnumerable<ModelDto>> Get()
         {
-           try
+            try
             {
                 var dbModel = ModelInfo();
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -43,12 +46,12 @@ namespace Beauvoir.Controllers
                     // Usuario no autenticado -> solo modelos públicos
                     dbModel = dbModel.Where(m => m.IsPublic);
                 }
-              
-                  else
-                    {
-                        var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
-                        if (user == null)
-                            return Unauthorized();
+
+                else
+                {
+                    var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+                    if (user == null)
+                        return Unauthorized();
 
                     var friendsIds = GetFriendIds(userId);
 
@@ -57,15 +60,16 @@ namespace Beauvoir.Controllers
                             || m.OwnerId == user.Id
                             || (!m.IsPublic && friendsIds.Contains(m.OwnerId))
                         );
-                    }
+                }
 
-                
+
                 // create restriccions if it is register or not 
                 //WHere..
                 var models = ModelMapping.MapToBL(dbModel);
 
-                return Ok(models); 
-            }catch(Exception ex)
+                return Ok(models);
+            }
+            catch (Exception ex)
             {
                 return StatusCode(500, "An unexpected error occurred while fetching projects.");
             }
@@ -75,7 +79,8 @@ namespace Beauvoir.Controllers
         [HttpGet("{id}")]
         public ActionResult<ModelDto> Get(int id)
         {
-            try {
+            try
+            {
                 var dbmodel = ModelInfo()
                     .FirstOrDefault(x => x.Id == id);
                 if (dbmodel == null)
@@ -96,7 +101,7 @@ namespace Beauvoir.Controllers
                         return Unauthorized();
 
                     var friendsIds = GetFriendIds(userId);
-                     
+
 
                     if (!dbmodel.IsPublic && dbmodel.OwnerId != user.Id && !friendsIds.Contains(dbmodel.OwnerId))
                         return Forbid();
@@ -105,11 +110,11 @@ namespace Beauvoir.Controllers
 
                 var model = ModelMapping.MapToBL(dbmodel);
 
-                 return Ok(model);
+                return Ok(model);
             }
             catch (Exception ex)
             {
-                 return StatusCode(500, "An unexpected error occurred while retrieving the project.");
+                return StatusCode(500, "An unexpected error occurred while retrieving the project.");
             }
         }
         //GET : Search 
@@ -120,20 +125,21 @@ namespace Beauvoir.Controllers
             try
             {
                 if (string.IsNullOrWhiteSpace(searchPart))
-                { 
+                {
                     return BadRequest("Search term must not be empty.");
                 }
                 // Validación de parámetros de paginación
                 if (page < 1 || pageSize < 1 || pageSize > 100)
                     return BadRequest("Invalid pagination parameters.");
 
-                var dbModels = ModelInfo().Where(x => x.Name.Contains(searchPart) || x.Description.Contains(searchPart));
-                {
+                var userId = GetUserId(); // We assume we have a method to get the current user's ID
+                var friendsIds = GetFriendIds(userId);
+                var dbModels = ModelInfo().Where(x =>
+                    (x.Name.Contains(searchPart) || x.Description.Contains(searchPart)) &&
+                    (x.IsPublic || x.OwnerId == userId || (friendsIds.Contains(x.OwnerId) && !x.IsPublic))
+                );
+                // Total count
 
-                    dbModels = dbModels.Where(p => p.IsPublic);
-                }
-                
-                // Total count (opcional, para frontend)
                 int totalCount = dbModels.Count();
 
                 // Aplicar paginación
@@ -145,7 +151,7 @@ namespace Beauvoir.Controllers
 
                 var models = ModelMapping.MapToBL(pagedModels);
 
-                
+
                 return Ok(new
                 {
                     Page = page,
@@ -156,89 +162,116 @@ namespace Beauvoir.Controllers
             }
             catch (Exception ex)
             {
-                                return StatusCode(500, "An unexpected error occurred during the search.");
+                return StatusCode(500, "An unexpected error occurred during the search.");
             }
         }
-        
-
-        // POST api/<ModelController>
-        [HttpPost("upload")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadModel(
-     [FromForm] string title,
-     [FromForm] string description,
-     [FromForm] bool isPublic,
-     [FromForm] List<int> tagsId,
-     IFormFile file)
+        private int GetUserId()
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out int userId))
+            {
+                throw new Exception("User ID claim is missing or invalid.");
+            }
+            return userId;
+        }
 
-            var allowedExtensions = new[] { ".obj", ".fbx" };
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
 
-            if (!allowedExtensions.Contains(extension))
+
+        [HttpPost("presigned-upload")]
+        public async Task<IActionResult> GetPresignedUploadUrl([FromBody] string extension)
+        {
+            if (string.IsNullOrEmpty(extension) || !(extension == ".fbx" || extension == ".obj"))
                 return BadRequest("Only .obj and .fbx files are allowed.");
 
-            var username = User.FindFirst(ClaimTypes.Name)?.Value;
-            var user = _dbContext.Users.FirstOrDefault(u => u.Username == username);
-            if (user == null)
-                return Unauthorized("Invalid user.");
-
-            var dbTags = _dbContext.Tags.Where(t => tagsId.Contains(t.Id)).ToList();
-            var missingTags = tagsId.Except(dbTags.Select(t => t.Id)).ToList();
-            if (missingTags.Any())
-                return BadRequest($"Missing tags: {string.Join(", ", missingTags)}");
-
-            // Generar nombre único para el objeto en Minio
             var objectName = $"{Guid.NewGuid()}{extension}";
 
-            // Subir a Minio
-            using (var stream = file.OpenReadStream())
-            {
-                await _minioService.UploadFileAsync(
-                    objectName,
-                    stream,
-                    "application/octet-stream");
-            }
+            var url = await _minioClient.PresignedPutObjectAsync(
+                new PresignedPutObjectArgs()
+                    .WithBucket(_bucketName)
+                    .WithObject(objectName)
+                    .WithExpiry(60 * 10) // válido 10 min
+            );
 
-            // Crear modelo en base de datos
-            var model = new Model
-            {
-                Name = title,
-                Description = description,
-                IsPublic = isPublic,
-                FileName = file.FileName,
-                FileExtension = extension,
-                FilePath = objectName, // Guardar la referencia al objeto en Minio
-                OwnerId = user.Id,
-                Owner = user,
-                ModelTags = dbTags.Select(t => new ModelTag { Tag = t }).ToList(),
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.Models.Add(model);
-            await _dbContext.SaveChangesAsync();
-
-            var modelDto = ModelMapping.MapToBL(model);
-            return Ok(modelDto);
+            return Ok(new { url, objectName });
         }
 
-        [HttpGet("[action]/{id}")]
-        [Authorize]
-        public async Task<IActionResult> Download(int id)
+        // 2️⃣ Registrar metadata en la DB
+        [HttpPost("register")]
+        public ActionResult RegisterModel([FromBody] RegisterModelDto dto)
         {
-            var model = _dbContext.Models.FirstOrDefault(m => m.Id == id);
-            if (model == null || string.IsNullOrEmpty(model.FilePath))
-                return NotFound("Model not found.");
+            var username = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
+            var user = _dbContext.Users.FirstOrDefault(u => u.Username == username);
 
-            var stream = await _minioService.DownloadFileAsync(model.FilePath);
-            return File(stream, "application/octet-stream", model.FileName);
+            if (user == null)
+                return Unauthorized("Invalid user.");
+            // Check if the tags exist
+            var tags = _dbContext.Tags.Where(t => dto.TagsId.Contains(t.Id)).ToList();
+            if (tags.Count != dto.TagsId.Count)
+            {
+                return BadRequest("One or more tags are invalid.");
+            }
+
+            var model = new Model
+            {
+                Name = dto.Title,
+                Description = dto.Description,
+                IsPublic = dto.IsPublic,
+                FileName = dto.OriginalFilename,
+                FileExtension = dto.Extension,
+                FilePath = dto.ObjectName, // aquí se guarda el nombre en MinIO
+                OwnerId = user.Id,
+                Owner = user,
+                CreatedAt = DateTime.UtcNow
+            };
+            // Add the tags
+            foreach (var tag in tags)
+            {
+                model.ModelTags.Add(new ModelTag { Tag = tag });
+            }
+
+            _dbContext.Models.Add(model);
+            _dbContext.SaveChanges();
+
+            return Ok(model);
+        }
+
+        // 3️⃣ Descargar con presigned URL
+        [HttpGet("{id}/download")]
+        public async Task<IActionResult> GetPresignedDownloadUrl(int id)
+        {
+            var model = await _dbContext.Models.FindAsync(id);
+            if (model == null)
+                return NotFound();
+            // Check access
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out int userId))
+            {
+                // Unauthenticated user: only public models
+                if (!model.IsPublic)
+                    return Forbid();
+            }
+            else
+            {
+                var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+                if (user == null)
+                    return Unauthorized();
+                var friendsIds = GetFriendIds(userId);
+                if (!model.IsPublic && model.OwnerId != userId && !friendsIds.Contains(model.OwnerId))
+                    return Forbid();
+            }
+            var url = await _minioClient.PresignedGetObjectAsync(
+                new PresignedGetObjectArgs()
+                    .WithBucket(_bucketName)
+                    .WithObject(model.FilePath)
+                    .WithExpiry(60 * 10) // válido 10 min
+            );
+            return Ok(new { url });
+
         }
 
         // PUT api/<ModelController>/5 // change visibility 
         [HttpPut("{id}")]
-        public ActionResult IsPublic(int id,bool boolean)
+        public ActionResult IsPublic(int id, bool boolean)
         {
             try
             {
@@ -249,10 +282,8 @@ namespace Beauvoir.Controllers
                     return Forbid();
                 }
 
-
                 var dbmodel = ModelInfo()
                         .FirstOrDefault(x => x.Id == id);
-
 
 
                 if (dbmodel == null)
@@ -278,8 +309,8 @@ namespace Beauvoir.Controllers
             var query = _dbContext.Models
                      .Include("ModelTags")
                      .Include("ModelTags.Tag")
-                     .Include("Owner"); 
-                   
+                     .Include("Owner");
+
             return query;
         }
         private List<int> GetFriendIds(int userId)

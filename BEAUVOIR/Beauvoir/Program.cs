@@ -1,83 +1,82 @@
 using Beauvoir.Models;
+using Beauvoir.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Minio;
 using System.Text;
-using Microsoft.Extensions.FileProviders;
-using Beauvoir.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Registrar AppDbContext con PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Registrar MinioClient
+var endpoint = builder.Configuration["Minio:Endpoint"];
+var accessKey = builder.Configuration["Minio:AccessKey"];
+var secretKey = builder.Configuration["Minio:SecretKey"];
+var bucketName = builder.Configuration["Minio:BucketName"];
+var useSSL = bool.Parse(builder.Configuration["Minio:UseSSL"]);
+
+var minioClient = new MinioClient()
+    .WithEndpoint(endpoint)
+    .WithCredentials(accessKey, secretKey)
+    .WithSSL(useSSL)
+    .Build();
+
+builder.Services.AddSingleton<IMinioClient>(minioClient);
+builder.Services.AddSingleton(new MinioService(builder.Configuration));
+
 // Add services to the container.
-
-builder.Services.AddSingleton<MinioService>();
-
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // dirección de tu frontend React
+        policy.WithOrigins("http://localhost:3000")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
 });
 
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(option =>
 {
-    option.SwaggerDoc("v1",
-        new OpenApiInfo
+    option.SwaggerDoc("v1", new OpenApiInfo { Title = "BEAUVOIR Web API", Version = "v1" });
+    option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        In = ParameterLocation.Header,
+        Description = "Please enter valid JWT",
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        BearerFormat = "JWT",
+        Scheme = "Bearer"
+    });
+    option.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
         {
-            Title = "BEAUVOIR Web API",
-            Version = "v1"
-
-        });
-    option.AddSecurityDefinition("Bearer",
-        new OpenApiSecurityScheme
-        {
-            In = ParameterLocation.Header,
-            Description = "Please enter valid JWT",
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            BearerFormat = "JWT",
-            Scheme = "Bearer"
-        });
-    option.AddSecurityRequirement(
-        new OpenApiSecurityRequirement
-        {
+            new OpenApiSecurityScheme
             {
-                new OpenApiSecurityScheme
+                Reference = new OpenApiReference
                 {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
-                },
-                new List<string>()
-            }
-        });
-}
-    );
-
-
-builder.Services.AddDbContext<DbContext>(options =>
-{
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new List<string>()
+        }
+    });
 });
 
 // JWT security services config 
 var secureKey = builder.Configuration["JWT:SecureKey"];
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o => {
+    .AddJwtBearer(o =>
+    {
         var Key = Encoding.UTF8.GetBytes(secureKey);
         o.TokenValidationParameters = new TokenValidationParameters
         {
@@ -100,9 +99,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseAuthentication();
-app.UseCors("AllowFrontend");
 
+app.UseCors("AllowFrontend");
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseStaticFiles();
 app.MapControllers();

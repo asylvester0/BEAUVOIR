@@ -24,7 +24,7 @@ namespace Beauvoir.Controllers
             var userId = GetUserId();
 
             // Obtener todos los friendships aceptados donde soy requester o receiver
-            var friendships =  _dbContext.Friendships
+            var friendships = _dbContext.Friendships
                 .Where(f => (f.RequesterId == userId || f.ReceiverId == userId) && f.Status == "Accepted")
                 .ToList();
 
@@ -32,7 +32,7 @@ namespace Beauvoir.Controllers
             var friendIds = friendships.Select(f => f.RequesterId == userId ? f.ReceiverId : f.RequesterId).ToList();
 
             // Obtener datos básicos de esos amigos (nombre, email, etc) - según User model
-            var friends =  _dbContext.Users
+            var friends = _dbContext.Users
                 .Where(u => friendIds.Contains(u.Id))
                 .Select(u => new
                 {
@@ -51,7 +51,7 @@ namespace Beauvoir.Controllers
         {
             var userId = GetUserId();
 
-            var requests =  _dbContext.Friendships
+            var requests = _dbContext.Friendships
                 .Where(f => f.ReceiverId == userId && f.Status == "Pending")
                 .Join(_dbContext.Users,
                       f => f.RequesterId,
@@ -97,7 +97,7 @@ namespace Beauvoir.Controllers
             };
 
             _dbContext.Friendships.Add(friendship);
-             _dbContext.SaveChanges();
+            _dbContext.SaveChanges();
 
             return Ok("Solicitud de amistad enviada.");
         }
@@ -108,16 +108,29 @@ namespace Beauvoir.Controllers
         {
             var currentUserId = GetUserId();
 
-            var friendship =  _dbContext.Friendships.FirstOrDefault(f =>
+            var friendship = _dbContext.Friendships.FirstOrDefault(f =>
                 f.RequesterId == userId && f.ReceiverId == currentUserId && f.Status == "Pending");
 
             if (friendship == null)
                 return NotFound("Solicitud de amistad no encontrada.");
 
             friendship.Status = "Accepted";
-             _dbContext.SaveChanges();
+            _dbContext.SaveChanges();
 
             return Ok("Solicitud de amistad aceptada.");
+        }
+        [HttpDelete("remove/{friendId}")]
+        public ActionResult RemoveFriend(int friendId)
+        {
+            var currentUserId = GetUserId();
+            var friendship = _dbContext.Friendships.FirstOrDefault(f =>
+                (f.RequesterId == currentUserId && f.ReceiverId == friendId && f.Status == "Accepted") ||
+                (f.RequesterId == friendId && f.ReceiverId == currentUserId && f.Status == "Accepted"));
+            if (friendship == null)
+                return NotFound("Friendship not found.");
+            _dbContext.Friendships.Remove(friendship);
+            _dbContext.SaveChanges();
+            return Ok("Friend removed.");
         }
 
         // POST: api/friendship/reject/{userId}
@@ -126,7 +139,7 @@ namespace Beauvoir.Controllers
         {
             var currentUserId = GetUserId();
 
-            var friendship =  _dbContext.Friendships.FirstOrDefault(f =>
+            var friendship = _dbContext.Friendships.FirstOrDefault(f =>
                 f.RequesterId == userId && f.ReceiverId == currentUserId && f.Status == "Pending");
 
             if (friendship == null)

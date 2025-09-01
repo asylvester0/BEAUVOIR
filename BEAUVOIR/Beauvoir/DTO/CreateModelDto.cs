@@ -12,8 +12,6 @@ namespace Beauvoir.DTO
 
         [Required(ErrorMessage = "File is required")]
         public string FilePath { get; set; }
-
-        [Required(ErrorMessage = "Tags are required")]
         public List<int> TagsId { get; set; }
         [Required(ErrorMessage = "Visibility is required")]
         public bool IsPublic { get; set; }

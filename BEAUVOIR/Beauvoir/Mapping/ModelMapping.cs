@@ -14,10 +14,10 @@ namespace Beauvoir.Mapping
                 Title = model.Name,
                 Description = model.Description,
                 Tags = model.ModelTags.Select(mt => mt.Tag.Name).ToList(),
-              //  FilePath = model.FilePath,
-                Owner = model.Owner.Username, 
+                FilePath = model.FilePath,
+                Owner = model.Owner.Username,
                 IsPublic = model.IsPublic,
-                CreatedAt = model.CreatedAt 
+                CreatedAt = model.CreatedAt
             };
 
 
