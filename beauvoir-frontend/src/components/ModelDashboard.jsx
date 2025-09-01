@@ -53,39 +53,64 @@ function ModelDashboard({ token }) {
   // Subir modelo
   // ========================
   const handleUpload = async () => {
-    if (!file) {
-      setError('Select file');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('description', description);
-    formData.append('isPublic', isPublic);
-    selectedTags.forEach(id => formData.append('tagsId', id));
-    formData.append('file', file);
-
-    try {
-      const res = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-
-      alert('Models upload sucessfully');
-      setTitle('');
-      setDescription('');
-      setIsPublic(false);
-      setFile(null);
-      setSelectedTags([]);
-      fetchModels(); // actualiza lista
-    } catch (err) {
-      setError(err.message || 'Error uploading  model');
-    }
-  };
-
+      if (!file) {
+    setError('Select file');
+    return;
+  }
+  // Obtener extensión del archivo
+  const extension = file.name.slice(file.name.lastIndexOf('.'));
+  if (extension !== '.fbx' && extension !== '.obj') {
+    setError('Only .fbx and .obj files are allowed');
+    return;
+  }
+  try {
+    // Paso 1: Obtener URL pre-firmada
+    const presignedResponse = await fetch(`${API_BASE}/presigned-upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(extension)
+    });
+    if (!presignedResponse.ok) throw new Error('Failed to get presigned URL');
+    const { url, objectName } = await presignedResponse.json();
+    // Paso 2: Subir archivo a MinIO usando la URL pre-firmada
+    const uploadResponse = await fetch(url, {
+      method: 'PUT',
+      body: file
+    });
+    if (!uploadResponse.ok) throw new Error('Upload to MinIO failed');
+    // Paso 3: Registrar metadatos en la base de datos
+    const registerResponse = await fetch(`${API_BASE}/register`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title,
+        description,
+        isPublic,
+        originalFilename: file.name,
+        extension,
+        objectName,
+        tagsId: selectedTags
+      })
+    });
+    if (!registerResponse.ok) throw new Error('Failed to register model');
+    alert('Model uploaded successfully');
+    // Reset form and refresh models
+    setTitle('');
+    setDescription('');
+    setIsPublic(false);
+    setFile(null);
+    setSelectedTags([]);
+    fetchModels();
+  } catch (err) {
+    setError(err.message || 'Error uploading model');
+  }
+};
   // ========================
   // Descargar modelo
   // ========================
